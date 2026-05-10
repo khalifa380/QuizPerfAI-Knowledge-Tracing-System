@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizPerfAI Dashboard</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+            margin: 0;
+            color: #1e293b;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+        }
+
+        .header {
+            background: #1e40af;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .search-box {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        input {
+            padding: 12px;
+            width: 60%;
+            border-radius: 10px;
+            border: 1px solid #ccc;
+        }
+
+        .results {
+            background: #f1f5f9;
+            margin-top: 10px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result {
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        .result:hover {
+            background: #3b82f6;
+            color: white;
+        }
+
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: center;
+        }
+
+        th {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .badge {
+            padding: 6px 10px;
+            border-radius: 10px;
+        }
+
+        .pred { background: #dbeafe; }
+        .act { background: #dcfce7; }
+        .acc { background: #fde68a; }
+
+        .chart {
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        .feedback {
+            background: #10b981;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            white-space: pre-line;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h2>🧠 QuizPerfAI Dashboard</h2>
+        <div id="accuracy">Loading accuracy...</div>
+    </div>
+
+    <!-- SEARCH -->
+    <div class="search-box">
+        <input id="search" placeholder="Search student name or ID">
+        <div id="results" class="results"></div>
+    </div>
+
+    <!-- TABLE -->
+    <div id="studentData" style="display:none;">
+        <h3 id="studentName"></h3>
+        <p>Records: <span id="records"></span></p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Predicted</th>
+                    <th>Actual</th>
+                    <th>Accuracy</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+
+        <!-- CHART -->
+        <div class="chart">
+            <canvas id="chart"></canvas>
+        </div>
+
+        <!-- FEEDBACK -->
+        <div class="feedback" id="feedback"></div>
+    </div>
+
+</div>
+
+<script>
+let chart = null;
+
+// Load accuracy
+fetch('/api/accuracy')
+.then(r => r.json())
+.then(data => {
+    document.getElementById("accuracy").innerText =
+        `${data.accuracy} Accuracy | ${data.students} Students | 11 Algorithms`;
+});
+
+// Search
+document.getElementById("search").addEventListener("input", async function() {
+    const q = this.value;
+    if (!q) return;
+
+    const res = await fetch(`/search?q=${q}`);
+    const data = await res.json();
+
+    const box = document.getElementById("results");
+    box.innerHTML = data.map(s => `
+        <div class="result" onclick="selectStudent(${s.id}, '${s.name}')">
+            ${s.name} (ID: ${s.id})
+        </div>
+    `).join("");
+
+    box.style.display = "block";
+});
+
+// Select student
+async function selectStudent(id, name) {
+    const res = await fetch(`/student/${id}`);
+    const data = await res.json();
+
+    document.getElementById("studentData").style.display = "block";
+    document.getElementById("studentName").innerText = `${name} (${id})`;
+    document.getElementById("records").innerText = data.records;
+
+    // Table
+    const tbody = document.getElementById("tableBody");
+    tbody.innerHTML = Object.entries(data.domains).map(([d, v]) => `
+        <tr>
+            <td>${d}</td>
+            <td><span class="badge pred">${v.predicted}</span></td>
+            <td><span class="badge act">${v.actual}</span></td>
+            <td><span class="badge acc">${v.accuracy}%</span></td>
+        </tr>
+    `).join("");
+
+    // Chart
+    const labels = Object.keys(data.domains);
+    const scores = labels.map(d => data.domains[d].actual);
+
+    const ctx = document.getElementById("chart");
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: scores
+            }]
+        }
+    });
+
+    // Feedback
+    document.getElementById("feedback").innerText = data.feedback;
+}
+</script>
+
+</body>
+</html>
